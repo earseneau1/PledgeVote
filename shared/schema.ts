@@ -9,7 +9,8 @@ import {
   integer,
   boolean,
   uuid,
-  pgEnum
+  pgEnum,
+  uniqueIndex,
 } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
@@ -45,6 +46,9 @@ export const users = pgTable("users", {
 export const voteTypeEnum = pgEnum('vote_type', ['yes_no', 'multiple_choice', 'ranked_choice']);
 export const voteStatusEnum = pgEnum('vote_status', ['draft', 'active', 'closed']);
 
+export const attendanceStatusEnum = pgEnum('attendance_status', ['scheduled', 'open', 'closed']);
+export const attendanceResponseEnum = pgEnum('attendance_response', ['present', 'excused', 'absent']);
+
 export const votes = pgTable("votes", {
   id: uuid("id").primaryKey().defaultRandom(),
   title: varchar("title", { length: 255 }).notNull(),
@@ -73,6 +77,29 @@ export const userVotes = pgTable("user_votes", {
   submittedAt: timestamp("submitted_at").defaultNow(),
 });
 
+export const attendanceSessions = pgTable("attendance_sessions", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  title: varchar("title", { length: 255 }).notNull(),
+  description: text("description"),
+  meetingDate: timestamp("meeting_date").notNull(),
+  status: attendanceStatusEnum("status").default('scheduled'),
+  createdBy: varchar("created_by").notNull().references(() => users.id),
+  chapterId: varchar("chapter_id"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const attendanceRecords = pgTable("attendance_records", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  sessionId: uuid("session_id").notNull().references(() => attendanceSessions.id),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  response: attendanceResponseEnum("response").default('present'),
+  note: text("note"),
+  recordedAt: timestamp("recorded_at").defaultNow(),
+}, (table) => [
+  uniqueIndex("attendance_session_user_idx").on(table.sessionId, table.userId),
+]);
+
 // Relations
 export const usersRelations = relations(users, ({ many }) => ({
   votesCreated: many(votes),
@@ -98,6 +125,25 @@ export const userVotesRelations = relations(userVotes, ({ one }) => ({
   }),
 }));
 
+export const attendanceSessionsRelations = relations(attendanceSessions, ({ one, many }) => ({
+  creator: one(users, {
+    fields: [attendanceSessions.createdBy],
+    references: [users.id],
+  }),
+  records: many(attendanceRecords),
+}));
+
+export const attendanceRecordsRelations = relations(attendanceRecords, ({ one }) => ({
+  session: one(attendanceSessions, {
+    fields: [attendanceRecords.sessionId],
+    references: [attendanceSessions.id],
+  }),
+  user: one(users, {
+    fields: [attendanceRecords.userId],
+    references: [users.id],
+  }),
+}));
+
 export type UpsertUser = typeof users.$inferInsert;
 export type User = typeof users.$inferSelect;
 
@@ -112,7 +158,22 @@ export const insertUserVoteSchema = createInsertSchema(userVotes).omit({
   submittedAt: true,
 });
 
+export const insertAttendanceSessionSchema = createInsertSchema(attendanceSessions).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertAttendanceRecordSchema = createInsertSchema(attendanceRecords).omit({
+  id: true,
+  recordedAt: true,
+});
+
 export type InsertVote = z.infer<typeof insertVoteSchema>;
 export type Vote = typeof votes.$inferSelect;
 export type InsertUserVote = z.infer<typeof insertUserVoteSchema>;
 export type UserVote = typeof userVotes.$inferSelect;
+export type InsertAttendanceSession = z.infer<typeof insertAttendanceSessionSchema>;
+export type AttendanceSession = typeof attendanceSessions.$inferSelect;
+export type InsertAttendanceRecord = z.infer<typeof insertAttendanceRecordSchema>;
+export type AttendanceRecord = typeof attendanceRecords.$inferSelect;

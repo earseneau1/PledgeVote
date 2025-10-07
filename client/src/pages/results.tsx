@@ -66,6 +66,9 @@ export default function Results() {
   const creator = vote.creator;
   const totalVotes = participation?.totalVotes || 0;
   const participationRate = totalVotes > 0 ? Math.round((totalVotes / 42) * 100) : 0;
+  const multipleChoiceOptions = Array.isArray(voteData.options)
+    ? (voteData.options as string[])
+    : [];
 
   return (
     <div className="min-h-screen bg-background">
@@ -193,9 +196,9 @@ export default function Results() {
                     </>
                   )}
                   
-                  {voteData.type === 'multiple_choice' && voteData.options && Array.isArray(voteData.options) && (
+                  {voteData.type === 'multiple_choice' && multipleChoiceOptions.length > 0 && (
                     <>
-                      {(voteData.options as string[]).map((option: string, index: number) => {
+                      {multipleChoiceOptions.map((option: string, index: number) => {
                         const optionVotes = results.filter((r: any) => r.choices?.selectedOption === option).length;
                         const percentage = totalVotes > 0 ? Math.round((optionVotes / totalVotes) * 100) : 0;
                         

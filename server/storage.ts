@@ -2,12 +2,18 @@ import {
   users,
   votes,
   userVotes,
+  attendanceSessions,
+  attendanceRecords,
   type User,
   type UpsertUser,
   type Vote,
   type InsertVote,
   type UserVote,
   type InsertUserVote,
+  type AttendanceSession,
+  type InsertAttendanceSession,
+  type AttendanceRecord,
+  type InsertAttendanceRecord,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, desc, sql } from "drizzle-orm";
@@ -25,13 +31,25 @@ export interface IStorage {
   getVotesByUser(userId: string): Promise<Vote[]>;
   getVotesByStatus(status: 'draft' | 'active' | 'closed'): Promise<Vote[]>;
   updateVoteStatus(id: string, status: 'draft' | 'active' | 'closed'): Promise<Vote>;
-  
+
   // User vote operations
   submitVote(userVote: InsertUserVote): Promise<UserVote>;
   getUserVote(voteId: string, userId: string): Promise<UserVote | undefined>;
   getVoteResults(voteId: string): Promise<any>;
   getVoteParticipation(voteId: string): Promise<any>;
-  
+
+  // Attendance operations
+  createAttendanceSession(session: InsertAttendanceSession): Promise<AttendanceSession>;
+  getAttendanceSession(id: string): Promise<AttendanceSession | undefined>;
+  getAttendanceSessionWithDetails(id: string): Promise<any>;
+  getAttendanceSessionsByStatus(status: 'scheduled' | 'open' | 'closed'): Promise<
+    Array<{ session: AttendanceSession; creator: { id: string | null; firstName: string | null; lastName: string | null; email: string | null } | null }>
+  >;
+  updateAttendanceStatus(id: string, status: 'scheduled' | 'open' | 'closed'): Promise<AttendanceSession>;
+  markAttendance(record: InsertAttendanceRecord): Promise<AttendanceRecord>;
+  getAttendanceRecord(sessionId: string, userId: string): Promise<AttendanceRecord | undefined>;
+  getAttendanceSummary(sessionId: string): Promise<{ counts: Record<string, number>; records: any[] }>;
+
   // User management
   getActiveMembers(): Promise<User[]>;
   updateUserRole(userId: string, role: string): Promise<User>;
@@ -177,6 +195,121 @@ export class DatabaseStorage implements IStorage {
       totalVotes: participation?.totalVotes || 0,
       voters: votersWithDetails,
     };
+  }
+
+  // Attendance operations
+  async createAttendanceSession(session: InsertAttendanceSession): Promise<AttendanceSession> {
+    const [newSession] = await db
+      .insert(attendanceSessions)
+      .values(session)
+      .returning();
+    return newSession;
+  }
+
+  async getAttendanceSession(id: string): Promise<AttendanceSession | undefined> {
+    const [session] = await db
+      .select()
+      .from(attendanceSessions)
+      .where(eq(attendanceSessions.id, id));
+    return session;
+  }
+
+  async getAttendanceSessionWithDetails(id: string): Promise<any> {
+    const [sessionWithCreator] = await db
+      .select({
+        session: attendanceSessions,
+        creator: {
+          id: users.id,
+          firstName: users.firstName,
+          lastName: users.lastName,
+          email: users.email,
+        },
+      })
+      .from(attendanceSessions)
+      .leftJoin(users, eq(attendanceSessions.createdBy, users.id))
+      .where(eq(attendanceSessions.id, id));
+
+    return sessionWithCreator;
+  }
+
+  async getAttendanceSessionsByStatus(status: 'scheduled' | 'open' | 'closed') {
+    return await db
+      .select({
+        session: attendanceSessions,
+        creator: {
+          id: users.id,
+          firstName: users.firstName,
+          lastName: users.lastName,
+          email: users.email,
+        },
+      })
+      .from(attendanceSessions)
+      .leftJoin(users, eq(attendanceSessions.createdBy, users.id))
+      .where(eq(attendanceSessions.status, status))
+      .orderBy(desc(attendanceSessions.meetingDate));
+  }
+
+  async updateAttendanceStatus(id: string, status: 'scheduled' | 'open' | 'closed'): Promise<AttendanceSession> {
+    const [updatedSession] = await db
+      .update(attendanceSessions)
+      .set({ status, updatedAt: new Date() })
+      .where(eq(attendanceSessions.id, id))
+      .returning();
+    return updatedSession;
+  }
+
+  async markAttendance(record: InsertAttendanceRecord): Promise<AttendanceRecord> {
+    const [attendance] = await db
+      .insert(attendanceRecords)
+      .values(record)
+      .onConflictDoUpdate({
+        target: [attendanceRecords.sessionId, attendanceRecords.userId],
+        set: {
+          response: record.response,
+          note: record.note,
+          recordedAt: new Date(),
+        },
+      })
+      .returning();
+
+    return attendance;
+  }
+
+  async getAttendanceRecord(sessionId: string, userId: string): Promise<AttendanceRecord | undefined> {
+    const [attendance] = await db
+      .select()
+      .from(attendanceRecords)
+      .where(and(eq(attendanceRecords.sessionId, sessionId), eq(attendanceRecords.userId, userId)));
+    return attendance;
+  }
+
+  async getAttendanceSummary(sessionId: string): Promise<{ counts: Record<string, number>; records: any[] }> {
+    const records = await db
+      .select({
+        id: attendanceRecords.id,
+        userId: attendanceRecords.userId,
+        response: attendanceRecords.response,
+        note: attendanceRecords.note,
+        recordedAt: attendanceRecords.recordedAt,
+        firstName: users.firstName,
+        lastName: users.lastName,
+        email: users.email,
+      })
+      .from(attendanceRecords)
+      .leftJoin(users, eq(attendanceRecords.userId, users.id))
+      .where(eq(attendanceRecords.sessionId, sessionId));
+
+    const counts = records.reduce(
+      (acc, record) => {
+        const status = (record.response ?? 'present') as 'present' | 'excused' | 'absent';
+        acc[status] = (acc[status] || 0) + 1;
+        acc.total = (acc.total || 0) + 1;
+        return acc;
+      },
+      { total: 0, present: 0, excused: 0, absent: 0 } as Record<string, number>,
+    );
+
+    return { counts, records };
   }
 
   // User management

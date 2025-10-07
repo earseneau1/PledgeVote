@@ -3,7 +3,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { Vote, Home, Archive, Users, Plus, ChevronDown } from "lucide-react";
+import { Vote, Home, Archive, Users, Plus, ChevronDown, CalendarCheck } from "lucide-react";
 import type { User } from "@shared/schema";
 
 export function NavigationHeader() {
@@ -31,16 +31,24 @@ export function NavigationHeader() {
           
           {/* Navigation */}
           <nav className="hidden md:flex items-center gap-6">
-            <Link 
-              href="/" 
+            <Link
+              href="/"
               className={`text-foreground hover:text-primary font-medium transition-colors flex items-center gap-2 ${location === '/' ? 'text-primary' : ''}`}
               data-testid="link-dashboard"
             >
               <Home size={16} />
               Dashboard
             </Link>
-            <Link 
-              href="/archive" 
+            <Link
+              href="/attendance"
+              className={`text-muted-foreground hover:text-primary font-medium transition-colors flex items-center gap-2 ${location === '/attendance' ? 'text-primary' : ''}`}
+              data-testid="link-attendance"
+            >
+              <CalendarCheck size={16} />
+              Attendance
+            </Link>
+            <Link
+              href="/archive"
               className={`text-muted-foreground hover:text-primary font-medium transition-colors flex items-center gap-2 ${location === '/archive' ? 'text-primary' : ''}`}
               data-testid="link-archive"
             >
@@ -66,7 +74,7 @@ export function NavigationHeader() {
                 <Avatar className="w-9 h-9">
                   <AvatarImage src={user?.profileImageUrl ? user.profileImageUrl : undefined} />
                   <AvatarFallback className="bg-secondary text-secondary-foreground font-semibold text-sm">
-                    {getInitials(user?.firstName, user?.lastName)}
+                    {getInitials(user?.firstName ?? undefined, user?.lastName ?? undefined)}
                   </AvatarFallback>
                 </Avatar>
                 <div className="hidden md:block text-left">
@@ -84,6 +92,12 @@ export function NavigationHeader() {
                   <Link href="/create-vote" className="md:hidden" data-testid="link-create-vote-mobile">
                     <Plus size={16} className="mr-2" />
                     Create Vote
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <Link href="/create-attendance" data-testid="link-create-attendance">
+                    <CalendarCheck size={16} className="mr-2" />
+                    Create Attendance
                   </Link>
                 </DropdownMenuItem>
                 <DropdownMenuSeparator className="md:hidden" />
