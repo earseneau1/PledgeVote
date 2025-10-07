@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -33,6 +33,7 @@ export default function CreateVote() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const [options, setOptions] = useState(['', '']);
+  const queryClient = useQueryClient();
 
   const form = useForm<VoteFormData>({
     resolver: zodResolver(voteSchema),
@@ -61,6 +62,7 @@ export default function CreateVote() {
       return await apiRequest('POST', '/api/votes', voteData);
     },
     onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/votes/active'] });
       toast({
         title: "Vote Created",
         description: "Your vote has been created successfully and is now active.",
