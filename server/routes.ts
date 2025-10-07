@@ -3,7 +3,12 @@ import { createServer, type Server } from "http";
 import { WebSocketServer, WebSocket } from "ws";
 import { storage } from "./storage";
 import { setupAuth, isAuthenticated } from "./replitAuth";
-import { insertVoteSchema, insertUserVoteSchema } from "@shared/schema";
+import {
+  insertVoteSchema,
+  insertUserVoteSchema,
+  insertAttendanceSessionSchema,
+  insertAttendanceRecordSchema,
+} from "@shared/schema";
 import { z } from "zod";
 
 export async function registerRoutes(app: Express): Promise<Server> {
@@ -175,6 +180,121 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error fetching active members:", error);
       res.status(500).json({ message: "Failed to fetch active members" });
+    }
+  });
+
+  // Attendance management routes
+  app.post('/api/attendance', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const meetingDate = new Date(req.body.meetingDate);
+
+      if (Number.isNaN(meetingDate.getTime())) {
+        return res.status(400).json({ message: "Invalid meeting date provided" });
+      }
+
+      const attendanceData = insertAttendanceSessionSchema.parse({
+        ...req.body,
+        meetingDate,
+        createdBy: userId,
+      });
+
+      const newSession = await storage.createAttendanceSession(attendanceData);
+
+      broadcastToClients('attendance_created', { session: newSession });
+
+      res.json(newSession);
+    } catch (error) {
+      console.error("Error creating attendance session:", error);
+      res.status(500).json({ message: "Failed to create attendance session" });
+    }
+  });
+
+  app.get('/api/attendance/status/:status', async (req, res) => {
+    try {
+      const { status } = req.params;
+      const sessions = await storage.getAttendanceSessionsByStatus(status as 'scheduled' | 'open' | 'closed');
+      res.json(sessions.map(({ session, creator }) => ({ ...session, creator })));
+    } catch (error) {
+      console.error("Error fetching attendance sessions:", error);
+      res.status(500).json({ message: "Failed to fetch attendance sessions" });
+    }
+  });
+
+  app.get('/api/attendance/:id', async (req, res) => {
+    try {
+      const session = await storage.getAttendanceSessionWithDetails(req.params.id);
+      if (!session) {
+        return res.status(404).json({ message: "Attendance session not found" });
+      }
+      res.json(session);
+    } catch (error) {
+      console.error("Error fetching attendance session:", error);
+      res.status(500).json({ message: "Failed to fetch attendance session" });
+    }
+  });
+
+  const attendanceStatusSchema = z.enum(['scheduled', 'open', 'closed']);
+
+  app.patch('/api/attendance/:id/status', isAuthenticated, async (req, res) => {
+    try {
+      const status = attendanceStatusSchema.parse(req.body.status);
+      const updatedSession = await storage.updateAttendanceStatus(req.params.id, status);
+
+      broadcastToClients('attendance_status_changed', { session: updatedSession });
+
+      res.json(updatedSession);
+    } catch (error) {
+      console.error("Error updating attendance status:", error);
+      res.status(500).json({ message: "Failed to update attendance status" });
+    }
+  });
+
+  app.post('/api/attendance/:id/mark', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const sessionId = req.params.id;
+
+      const attendanceData = insertAttendanceRecordSchema.parse({
+        sessionId,
+        userId,
+        response: req.body.response,
+        note: req.body.note,
+      });
+
+      const record = await storage.markAttendance(attendanceData);
+
+      broadcastToClients('attendance_recorded', {
+        sessionId,
+        userId,
+        response: record.response,
+      });
+
+      res.json(record);
+    } catch (error) {
+      console.error("Error recording attendance:", error);
+      res.status(500).json({ message: "Failed to record attendance" });
+    }
+  });
+
+  app.get('/api/attendance/:id/my-record', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const record = await storage.getAttendanceRecord(req.params.id, userId);
+      res.json(record);
+    } catch (error) {
+      console.error("Error fetching attendance record:", error);
+      res.status(500).json({ message: "Failed to fetch attendance record" });
+    }
+  });
+
+  app.get('/api/attendance/:id/summary', async (req, res) => {
+    try {
+      const summary = await storage.getAttendanceSummary(req.params.id);
+      res.json(summary);
+    } catch (error) {
+      console.error("Error fetching attendance summary:", error);
+      res.status(500).json({ message: "Failed to fetch attendance summary" });
     }
   });
 

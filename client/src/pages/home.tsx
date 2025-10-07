@@ -6,8 +6,13 @@ import { VoteCard } from "@/components/vote-card";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useWebSocket } from "@/hooks/useWebSocket";
-import { Vote, TrendingUp, Users, Clock, Plus } from "lucide-react";
-import type { Vote as VoteType, User } from "@shared/schema";
+import { Vote, TrendingUp, Users, Clock, Plus, CalendarCheck } from "lucide-react";
+import type { Vote as VoteType, User, AttendanceSession } from "@shared/schema";
+
+type AttendanceWithCreator = AttendanceSession & {
+  creator?: Pick<User, "firstName" | "lastName"> | null;
+};
+import { AttendanceCard } from "@/components/attendance-card";
 
 export default function Home() {
   const [votes, setVotes] = useState<VoteType[]>([]);
@@ -18,6 +23,10 @@ export default function Home() {
 
   const { data: activeMembers } = useQuery<User[]>({
     queryKey: ['/api/users/active'],
+  });
+
+  const { data: openAttendance } = useQuery<AttendanceWithCreator[]>({
+    queryKey: ['/api/attendance/status/open'],
   });
 
   // WebSocket for real-time updates
@@ -36,6 +45,7 @@ export default function Home() {
 
   const activeMemberCount = activeMembers?.length || 0;
   const activeVoteCount = votes.length;
+  const openAttendanceCount = openAttendance?.length ?? 0;
 
   return (
     <div className="min-h-screen bg-background">
@@ -62,6 +72,13 @@ export default function Home() {
                 <div>
                   <p className="text-xs text-muted-foreground">Active Votes</p>
                   <p className="text-lg font-semibold text-foreground" data-testid="text-active-votes">{activeVoteCount}</p>
+                </div>
+              </div>
+              <div className="bg-card border border-border rounded-lg px-4 py-3 flex items-center gap-3">
+                <CalendarCheck className="text-primary" size={20} />
+                <div>
+                  <p className="text-xs text-muted-foreground">Open Attendance</p>
+                  <p className="text-lg font-semibold text-foreground" data-testid="text-open-attendance">{openAttendanceCount}</p>
                 </div>
               </div>
             </div>
@@ -124,6 +141,37 @@ export default function Home() {
           </div>
         </section>
 
+        {/* Attendance Highlight */}
+        <section className="mb-12">
+          <div className="flex items-center justify-between mb-6">
+            <h3 className="text-2xl font-bold text-foreground">Attendance Sessions</h3>
+            <Link href="/attendance">
+              <Button variant="outline" className="hidden md:inline-flex" data-testid="button-view-attendance">
+                Manage Attendance
+              </Button>
+            </Link>
+          </div>
+
+          {openAttendance && openAttendance.length > 0 ? (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {openAttendance.slice(0, 2).map((session) => (
+                <AttendanceCard key={session.id} session={session} />
+              ))}
+            </div>
+          ) : (
+            <Card className="border-dashed">
+              <CardContent className="py-10 text-center space-y-3">
+                <CalendarCheck className="mx-auto text-muted-foreground" size={36} />
+                <h4 className="text-lg font-semibold text-foreground">No open attendance sessions</h4>
+                <p className="text-sm text-muted-foreground">Keep members accountable by starting an attendance session.</p>
+                <Link href="/create-attendance">
+                  <Button data-testid="button-create-attendance">Create session</Button>
+                </Link>
+              </CardContent>
+            </Card>
+          )}
+        </section>
+
         {/* Quick Stats */}
         <section className="mb-12">
           <h3 className="text-2xl font-bold text-foreground mb-6">Chapter Voting Activity</h3>
@@ -174,6 +222,17 @@ export default function Home() {
                 </div>
                 <p className="text-3xl font-bold text-foreground mb-1" data-testid="text-pending-votes">{activeVoteCount}</p>
                 <p className="text-sm text-muted-foreground">Pending Your Vote</p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="p-6">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="w-12 h-12 bg-primary/10 rounded-lg flex items-center justify-center">
+                    <CalendarCheck className="text-primary" size={24} />
+                  </div>
+                </div>
+                <p className="text-3xl font-bold text-foreground mb-1" data-testid="text-open-attendance-summary">{openAttendanceCount}</p>
+                <p className="text-sm text-muted-foreground">Open Attendance Sessions</p>
               </CardContent>
             </Card>
           </div>

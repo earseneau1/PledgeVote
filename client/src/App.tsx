@@ -11,6 +11,9 @@ import CreateVote from "@/pages/create-vote";
 import VoteSession from "@/pages/vote-session";
 import Results from "@/pages/results";
 import Archive from "@/pages/archive";
+import Attendance from "@/pages/attendance";
+import CreateAttendance from "@/pages/create-attendance";
+import AttendanceSessionPage from "@/pages/attendance-session";
 
 function Router() {
   const { isAuthenticated, isLoading } = useAuth();
@@ -26,6 +29,9 @@ function Router() {
           <Route path="/vote/:id" component={VoteSession} />
           <Route path="/results/:id" component={Results} />
           <Route path="/archive" component={Archive} />
+          <Route path="/attendance" component={Attendance} />
+          <Route path="/create-attendance" component={CreateAttendance} />
+          <Route path="/attendance/:id" component={AttendanceSessionPage} />
         </>
       )}
       <Route component={NotFound} />
