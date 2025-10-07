@@ -26,8 +26,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post('/api/votes', isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user.claims.sub;
+
+      const startDate = new Date(req.body.startDate);
+      const endDate = new Date(req.body.endDate);
+
+      if (Number.isNaN(startDate.getTime()) || Number.isNaN(endDate.getTime())) {
+        return res.status(400).json({ message: "Invalid vote dates provided" });
+      }
+
       const voteData = insertVoteSchema.parse({
         ...req.body,
+        startDate,
+        endDate,
         createdBy: userId,
       });
       
